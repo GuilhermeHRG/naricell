@@ -51,9 +51,26 @@ export function CaixaVendasPage() {
   const podeExcluir = usuario?.perfil === 'ADMIN';
   const totalVenda = useMemo(() => itens.reduce((soma, item) => soma + Number(item.valorTotal || 0), 0), [itens]);
   const periodoValido = !dataInicial || !dataFinal || dataInicial <= dataFinal;
-  const dentroDoPeriodo = (data: string) => (!dataInicial || data >= dataInicial) && (!dataFinal || data <= dataFinal);
-  const movimentosFiltrados = useMemo(() => periodoValido ? movimentos.filter((movimento) => dentroDoPeriodo(movimento.data)) : [], [movimentos, dataInicial, dataFinal, periodoValido]);
-  const vendasFiltradas = useMemo(() => periodoValido ? vendas.filter((venda) => dentroDoPeriodo(timestampParaIsoLocal(venda.criadoEm))) : [], [vendas, dataInicial, dataFinal, periodoValido]);
+  const movimentosFiltrados = useMemo(() => {
+    if (!periodoValido) return [];
+    return movimentos.filter((movimento) => {
+      // Registros antigos podem não ter o campo `data`; nesse caso usamos a
+      // data local do timestamp de criação para que eles também apareçam.
+      const dataMovimento = movimento.data || timestampParaIsoLocal(movimento.criadoEm);
+      return Boolean(dataMovimento)
+        && (!dataInicial || dataMovimento >= dataInicial)
+        && (!dataFinal || dataMovimento <= dataFinal);
+    });
+  }, [movimentos, dataInicial, dataFinal, periodoValido]);
+  const vendasFiltradas = useMemo(() => {
+    if (!periodoValido) return [];
+    return vendas.filter((venda) => {
+      const dataVenda = timestampParaIsoLocal(venda.criadoEm);
+      return Boolean(dataVenda)
+        && (!dataInicial || dataVenda >= dataInicial)
+        && (!dataFinal || dataVenda <= dataFinal);
+    });
+  }, [vendas, dataInicial, dataFinal, periodoValido]);
   const saldoPeriodo = useMemo(() => movimentosFiltrados.reduce((saldo, movimento) => saldo + (movimento.tipo === 'ENTRADA' ? Number(movimento.valor || 0) : -Number(movimento.valor || 0)), 0), [movimentosFiltrados]);
   const entradasPeriodo = useMemo(() => movimentosFiltrados.filter((m) => m.tipo === 'ENTRADA').reduce((s, m) => s + Number(m.valor || 0), 0), [movimentosFiltrados]);
   const vendasPeriodo = useMemo(() => vendasFiltradas.filter((v) => v.status === 'CONCLUIDA').length, [vendasFiltradas]);
@@ -231,7 +248,47 @@ export function CaixaVendasPage() {
   return <>
     <section className="page-heading"><div><p className="eyebrow">CAIXA</p><h2>Fluxo de caixa e vendas</h2><p>Consulte períodos, acompanhe entradas e saídas e faça o fechamento diário.</p></div>{podeVender && <div className="button-group"><button className="button button-secondary" disabled={!!fechamentoHoje || fechandoCaixa} onClick={() => void fecharCaixaHoje()}>{fechamentoHoje ? <CheckCircle2 size={18}/> : <LockKeyhole size={18}/>} {fechamentoHoje ? 'Caixa de hoje fechado' : fechandoCaixa ? 'Fechando...' : 'Fechar caixa do dia'}</button><button className="button button-primary" disabled={!!fechamentoHoje} onClick={abrirVenda}><PlusCircle size={18}/>Nova venda</button></div>}</section>
 
-    <section className="panel cash-period-panel"><div className="cash-period-filter"><div className="cash-period-title"><CalendarRange size={20}/><div><strong>Período do caixa</strong><span>Os totais e as listas abaixo seguem o período selecionado.</span></div></div><label className="field"><span>Data inicial</span><input type="date" value={dataInicial} onChange={(e) => setDataInicial(e.target.value)}/></label><label className="field"><span>Data final</span><input type="date" value={dataFinal} onChange={(e) => setDataFinal(e.target.value)}/></label><button className="button button-secondary" onClick={() => { setDataInicial(hojeIso()); setDataFinal(hojeIso()); }}>Hoje</button></div>{!periodoValido && <div className="period-error">A data inicial não pode ser posterior à data final.</div>}</section>
+    <section className="panel cash-period-panel" aria-labelledby="cash-period-heading">
+      <div className="cash-period-filter">
+        <div className="cash-period-title">
+          <div className="cash-period-icon"><CalendarRange size={20}/></div>
+          <div>
+            <strong id="cash-period-heading">Período do caixa</strong>
+            <span>Os totais e as listas abaixo seguem o período selecionado.</span>
+          </div>
+        </div>
+        <label className="field cash-period-field">
+          <span>Data inicial</span>
+          <input
+            type="date"
+            value={dataInicial}
+            max={dataFinal || undefined}
+            onChange={(e) => setDataInicial(e.target.value)}
+          />
+        </label>
+        <label className="field cash-period-field">
+          <span>Data final</span>
+          <input
+            type="date"
+            value={dataFinal}
+            min={dataInicial || undefined}
+            onChange={(e) => setDataFinal(e.target.value)}
+          />
+        </label>
+        <button
+          type="button"
+          className="button button-secondary cash-period-today"
+          onClick={() => {
+            const hoje = hojeIso();
+            setDataInicial(hoje);
+            setDataFinal(hoje);
+          }}
+        >
+          Hoje
+        </button>
+      </div>
+      {!periodoValido && <div className="period-error">A data inicial não pode ser posterior à data final.</div>}
+    </section>
 
     <div className="stats-grid"><article className="stat-card"><div className="stat-icon teal"><Banknote size={21}/></div><div><span>Saldo do período</span><strong className="currency-stat">{moeda(saldoPeriodo)}</strong></div></article><article className="stat-card"><div className="stat-icon blue"><WalletCards size={21}/></div><div><span>Entradas do período</span><strong className="currency-stat">{moeda(entradasPeriodo)}</strong></div></article><article className="stat-card"><div className="stat-icon amber"><ShoppingCart size={21}/></div><div><span>Vendas do período</span><strong>{vendasPeriodo}</strong></div></article><article className="stat-card"><div className={`stat-icon ${fechamentoHoje ? 'teal' : 'rose'}`}>{fechamentoHoje ? <CheckCircle2 size={21}/> : <LockKeyhole size={21}/>}</div><div><span>Caixa de hoje</span><strong>{fechamentoHoje ? 'Fechado' : 'Aberto'}</strong>{fechamentoHoje && <small>Saldo: {moeda(fechamentoHoje.saldo)}</small>}</div></article></div>
     <div className="dashboard-columns finance-columns"><section className="panel"><div className="panel-header"><div><h3>Fluxo de caixa</h3><p>Somente valores efetivamente recebidos ou pagos</p></div></div><div className="table-wrap compact-table"><table><thead><tr><th>Data</th><th>Descrição</th><th>Forma</th><th>Valor</th>{podeExcluir && <th className="actions-column">Ações</th>}</tr></thead><tbody>{movimentosFiltrados.map((m) => <tr key={m.id}><td>{dataBr(m.data)}</td><td><strong>{m.descricao}</strong><small>{m.clienteNome || m.origem}</small></td><td>{m.formaPagamento}</td><td className={m.tipo === 'ENTRADA' ? 'value-positive' : 'value-negative'}>{m.tipo === 'ENTRADA' ? '+' : '-'} {moeda(m.valor)}</td>{podeExcluir && <td className="actions-cell"><button className="icon-button danger" title="Excluir registro do caixa" disabled={excluindoId === `movimento-${m.id}`} onClick={() => void excluirMovimento(m)}><Trash2 size={17}/></button></td>}</tr>)}{movimentosFiltrados.length === 0 && <tr><td colSpan={podeExcluir ? 5 : 4}><div className="empty-state compact">Nenhuma movimentação no período.</div></td></tr>}</tbody></table></div></section>
