@@ -8,7 +8,7 @@ import { db } from '../lib/firebase';
 import { criarUsuarioSistema, editarUsuarioSistema, excluirUsuarioSistema } from '../lib/usuariosAdmin';
 import type { Perfil, Usuario } from '../types';
 
-const perfis: Perfil[] = ['ADMIN', 'ATENDENTE', 'TECNICO', 'FINANCEIRO', 'CONSULTA'];
+const perfis: Perfil[] = ['ADMIN', 'ATENDENTE'];
 const vazio = { nome: '', email: '', senha: '', perfil: 'ATENDENTE' as Perfil, ativo: true };
 const EMPRESA_ID = 'principal';
 

@@ -1,6 +1,6 @@
 import type { Timestamp } from 'firebase/firestore';
 
-export type Perfil = 'ADMIN' | 'ATENDENTE' | 'TECNICO' | 'FINANCEIRO' | 'CONSULTA';
+export type Perfil = 'ADMIN' | 'ATENDENTE';
 export type StatusOS =
   | 'ABERTA'
   | 'AGUARDANDO_DIAGNOSTICO'
@@ -14,6 +14,7 @@ export type StatusOS =
 
 export type TipoBloqueio = 'NENHUM' | 'PIN' | 'SENHA' | 'PADRAO';
 export type TimestampValue = Timestamp | Date | null;
+export type FormaPagamentoVenda = 'DINHEIRO' | 'PIX' | 'CARTAO' | 'CARTEIRA';
 
 export interface EntityBase {
   id: string;
@@ -91,6 +92,12 @@ export interface OrdemServico extends EntityBase {
   tipoBloqueio?: TipoBloqueio;
   codigoBloqueio?: string;
   padraoBloqueio?: number[];
+  pagamentoRegistrado?: boolean;
+  formaPagamento?: FormaPagamentoVenda;
+  dataPagamento?: string;
+  movimentacaoCaixaId?: string;
+  contaReceberId?: string;
+  registroFinanceiroId?: string;
 }
 
 export interface OrdemServicoItem extends EntityBase {
@@ -122,12 +129,15 @@ export interface ContaReceber extends EntityBase {
   clienteNome: string;
   ordemServicoId?: string;
   ordemServicoNumero?: number;
+  vendaId?: string;
+  vendaNumero?: number;
   descricao: string;
   valorOriginal: number;
   valorAberto: number;
   vencimento: string;
   status: 'ABERTA' | 'PARCIAL' | 'RECEBIDA' | 'CANCELADA';
   observacoes?: string;
+  registroFinanceiroId?: string;
 }
 
 export interface Recebimento extends EntityBase {
@@ -193,4 +203,53 @@ export interface LicencaSistema extends EntityBase {
   observacoes?: string;
   atualizadoPor?: string;
   atualizadoPorEmail?: string;
+}
+
+
+export interface MovimentacaoCaixa extends EntityBase {
+  tipo: 'ENTRADA' | 'SAIDA';
+  origem: 'ORDEM_SERVICO' | 'VENDA' | 'RECEBIMENTO' | 'PAGAMENTO' | 'MANUAL';
+  origemId?: string;
+  origemNumero?: number;
+  descricao: string;
+  clienteId?: string;
+  clienteNome?: string;
+  valor: number;
+  formaPagamento: Exclude<FormaPagamentoVenda, 'CARTEIRA'> | string;
+  data: string;
+  usuarioId: string;
+  usuarioNome: string;
+}
+
+export interface FechamentoCaixa extends EntityBase {
+  data: string;
+  totalEntradas: number;
+  totalSaidas: number;
+  saldo: number;
+  quantidadeMovimentacoes: number;
+  fechadoPorId: string;
+  fechadoPorNome: string;
+}
+
+export interface Venda extends EntityBase {
+  numero: number;
+  clienteId?: string;
+  clienteNome: string;
+  valorTotal: number;
+  formaPagamento: FormaPagamentoVenda;
+  status: 'CONCLUIDA' | 'CANCELADA';
+  contaReceberId?: string;
+  movimentacaoCaixaId?: string;
+  registroFinanceiroId?: string;
+  observacoes?: string;
+  usuarioId: string;
+  usuarioNome: string;
+}
+
+export interface VendaItem extends EntityBase {
+  produtoId: string;
+  produtoDescricao: string;
+  quantidade: number;
+  valorUnitario: number;
+  valorTotal: number;
 }

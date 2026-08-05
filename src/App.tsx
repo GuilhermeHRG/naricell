@@ -14,6 +14,7 @@ import { ServicosPage } from './pages/ServicosPage';
 import { EstoquePage } from './pages/EstoquePage';
 import { OrdensServicoPage } from './pages/OrdensServicoPage';
 import { FinanceiroPage } from './pages/FinanceiroPage';
+import { CaixaVendasPage } from './pages/CaixaVendasPage';
 import { UsuariosPage } from './pages/UsuariosPage';
 import { ConfiguracoesPage } from './pages/ConfiguracoesPage';
 import { LicencaBloqueadaPage } from './pages/LicencaBloqueadaPage';
@@ -122,6 +123,7 @@ export function App() {
       case 'servicos': return <ServicosPage />;
       case 'estoque': return <EstoquePage />;
       case 'ordens': return <OrdensServicoPage />;
+      case 'caixa': return <CaixaVendasPage />;
       case 'financeiro': return <FinanceiroPage />;
       case 'usuarios': return <UsuariosPage />;
       case 'configuracoes': return <ConfiguracoesPage />;

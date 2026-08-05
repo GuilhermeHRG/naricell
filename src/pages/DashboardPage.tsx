@@ -22,7 +22,7 @@ interface DashboardProps {
 
 const STATUS_OS_FINALIZADA = ['ENTREGUE', 'CANCELADA', 'SEM_CONSERTO'];
 
-const PERFIS_FINANCEIROS = ['ADMIN', 'ATENDENTE', 'FINANCEIRO'];
+const PERFIS_FINANCEIROS = ['ADMIN', 'ATENDENTE'];
 
 export function DashboardPage({ irPara }: DashboardProps) {
   const auth = useAuth() as any;

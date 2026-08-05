@@ -25,7 +25,20 @@ export const dataHoraBr = (valor: TimestampValue | undefined) => {
   return data.toLocaleString('pt-BR');
 };
 
-export const hojeIso = () => new Date().toISOString().slice(0, 10);
+export const dataParaIsoLocal = (data: Date) => {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, '0');
+  const dia = String(data.getDate()).padStart(2, '0');
+  return `${ano}-${mes}-${dia}`;
+};
+
+export const hojeIso = () => dataParaIsoLocal(new Date());
+
+export const timestampParaIsoLocal = (valor: TimestampValue | undefined) => {
+  if (!valor) return '';
+  const data = valor instanceof Date ? valor : valor.toDate();
+  return dataParaIsoLocal(data);
+};
 
 export const normalizarTexto = (valor: string) =>
   valor

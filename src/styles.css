@@ -631,3 +631,34 @@ input:focus, select:focus, textarea:focus { background: #fff; border-color: var(
 .supplier-users-box { overflow: hidden; }
 .supplier-users-box .table-wrap { max-height: 250px; overflow: auto; }
 @media (max-width: 880px) { .supplier-summary-grid { grid-template-columns: 1fr; } .supplier-companies-panel .table-wrap { max-height: none; } }
+.sale-total { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-radius:12px; background:#eef6ff; border:1px solid #d6e8f8; }
+.sale-total span { color:#61778c; font-weight:700; }
+.sale-total strong { color:#123f68; font-size:22px; }
+.value-positive { color:#14805a; font-weight:800; }
+.value-negative { color:#b44955; font-weight:800; }
+
+/* Venda: modal amplo no desktop e tela cheia no celular */
+.modal-venda { width: min(1180px, calc(100vw - 32px)); }
+.modal-venda .modal-content { min-height: 0; }
+@media (max-width: 760px) {
+  .modal-venda-backdrop { padding: 0; align-items: stretch; }
+  .modal-venda {
+    width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+  .modal-venda .modal-header { flex: 0 0 auto; }
+  .modal-venda .modal-content { flex: 1 1 auto; overflow-y: auto; padding-bottom: 96px; }
+  .modal-venda .modal-actions {
+    position: sticky;
+    bottom: -1px;
+    z-index: 2;
+    margin: 0 -17px -23px;
+    padding: 14px 17px calc(14px + env(safe-area-inset-bottom));
+    background: rgba(244, 248, 253, .97);
+    border-top: 1px solid #cbd8e5;
+    backdrop-filter: blur(8px);
+  }
+  .modal-venda .modal-actions .button { flex: 1; }
+}

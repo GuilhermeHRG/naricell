@@ -7,9 +7,10 @@ interface ModalProps {
   children: ReactNode;
   aoFechar: () => void;
   largura?: 'sm' | 'md' | 'lg' | 'xl';
+  classe?: string;
 }
 
-export function Modal({ aberto, titulo, children, aoFechar, largura = 'md' }: ModalProps) {
+export function Modal({ aberto, titulo, children, aoFechar, largura = 'md', classe = '' }: ModalProps) {
   useEffect(() => {
     if (!aberto) return undefined;
     const anterior = document.body.style.overflow;
@@ -26,8 +27,8 @@ export function Modal({ aberto, titulo, children, aoFechar, largura = 'md' }: Mo
 
   if (!aberto) return null;
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={aoFechar}>
-      <section className={`modal modal-${largura}`} role="dialog" aria-modal="true" onMouseDown={(evento) => evento.stopPropagation()}>
+    <div className={`modal-backdrop ${classe ? `${classe}-backdrop` : ""}`.trim()} role="presentation" onMouseDown={aoFechar}>
+      <section className={`modal modal-${largura} ${classe}`.trim()} role="dialog" aria-modal="true" onMouseDown={(evento) => evento.stopPropagation()}>
         <header className="modal-header">
           <h2>{titulo}</h2>
           <button className="icon-button" type="button" onClick={aoFechar} aria-label="Fechar">
