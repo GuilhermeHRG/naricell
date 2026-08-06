@@ -24,6 +24,7 @@ import type {
   Cliente,
   ConfiguracaoEmpresa,
   FormaPagamentoVenda,
+  Fornecedor,
   OrdemServico,
   OrdemServicoItem,
   Produto,
@@ -44,6 +45,8 @@ const empresaPadrao: ConfiguracaoEmpresa = { nomeFantasia: 'NariCell Assistênci
 const formVazio = {
   clienteId: '',
   clienteNome: '',
+  fornecedorId: '',
+  fornecedorNome: '',
   aparelhoMarca: '',
   aparelhoModelo: '',
   aparelhoImei: '',
@@ -84,8 +87,96 @@ function temDiferencaDeTotais(ordem: OrdemServico, totais: TotaisOS) {
     || Math.abs(Number(ordem.valorTotal || 0) - totais.valorTotal) > 0.001;
 }
 
+
+interface CadastroSelecionavel {
+  id: string;
+  nome: string;
+  telefone?: string;
+  whatsapp?: string;
+  cpfCnpj?: string;
+  ativo: boolean;
+}
+
+interface CampoBuscaCadastroProps {
+  label: string;
+  valor: string;
+  selecionadoId: string;
+  opcoes: CadastroSelecionavel[];
+  placeholder: string;
+  obrigatorio?: boolean;
+  className?: string;
+  aoAlterar: (nome: string, id: string) => void;
+}
+
+function CampoBuscaCadastro({
+  label,
+  valor,
+  selecionadoId,
+  opcoes,
+  placeholder,
+  obrigatorio = false,
+  className = '',
+  aoAlterar,
+}: CampoBuscaCadastroProps) {
+  const [aberto, setAberto] = useState(false);
+  const termo = normalizarTexto(valor);
+  const selecionado = opcoes.find((opcao) => opcao.id === selecionadoId);
+  const sugestoes = useMemo(() => {
+    if (!termo) return opcoes.filter((opcao) => opcao.ativo).slice(0, 8);
+    return opcoes
+      .filter((opcao) => opcao.ativo && normalizarTexto(
+        `${opcao.nome} ${opcao.whatsapp ?? ''} ${opcao.telefone ?? ''} ${opcao.cpfCnpj ?? ''}`,
+      ).includes(termo))
+      .slice(0, 8);
+  }, [opcoes, termo]);
+
+  return (
+    <div className={`field field-autocomplete ${className}`}>
+      <span>{label}{obrigatorio ? ' *' : ''}</span>
+      <div className="autocomplete-control">
+        <input
+          required={obrigatorio}
+          autoComplete="off"
+          value={valor}
+          onFocus={() => setAberto(true)}
+          onBlur={() => window.setTimeout(() => setAberto(false), 120)}
+          onChange={(evento) => {
+            aoAlterar(evento.target.value, '');
+            setAberto(true);
+          }}
+          placeholder={placeholder}
+        />
+        {aberto && sugestoes.length > 0 && (
+          <div className="autocomplete-options" role="listbox">
+            {sugestoes.map((opcao) => (
+              <button
+                key={opcao.id}
+                type="button"
+                className="autocomplete-option"
+                onMouseDown={(evento) => evento.preventDefault()}
+                onClick={() => {
+                  aoAlterar(opcao.nome, opcao.id);
+                  setAberto(false);
+                }}
+              >
+                <strong>{opcao.nome}</strong>
+                <small>{opcao.whatsapp || opcao.telefone || opcao.cpfCnpj || 'Cadastro sem contato informado'}</small>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <small className={selecionado ? 'autocomplete-linked' : 'autocomplete-free'}>
+        {selecionado ? `Cadastro vinculado: ${selecionado.nome}` : valor.trim() ? 'Texto livre — nenhum cadastro vinculado' : 'Digite para buscar ou informe um nome livre'}
+      </small>
+    </div>
+  );
+}
+
 export function OrdensServicoPage() {
   const [ordens, setOrdens] = useState<OrdemServico[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [empresa, setEmpresa] = useState<ConfiguracaoEmpresa>(empresaPadrao);
   const [busca, setBusca] = useState('');
@@ -121,6 +212,8 @@ export function OrdensServicoPage() {
     () => onSnapshot(query(empresaCollection(empresaId!, 'ordensServico'), orderBy('criadoEm', 'desc')), (snap) => setOrdens(snap.docs.map((d) => ({ id: d.id, ...d.data() } as OrdemServico))), () => showToast('Não foi possível carregar as ordens.', 'error')),
     [showToast, empresaId],
   );
+  useEffect(() => onSnapshot(query(empresaCollection(empresaId!, 'clientes'), orderBy('nome')), (snap) => setClientes(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Cliente))), () => showToast('Não foi possível carregar os clientes para busca.', 'error')), [empresaId, showToast]);
+  useEffect(() => onSnapshot(query(empresaCollection(empresaId!, 'fornecedores'), orderBy('nome')), (snap) => setFornecedores(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Fornecedor))), () => showToast('Não foi possível carregar os fornecedores para busca.', 'error')), [empresaId, showToast]);
   useEffect(() => onSnapshot(query(empresaCollection(empresaId!, 'usuarios'), orderBy('nome')), (snap) => setUsuarios(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Usuario))), () => undefined), [empresaId]);
   useEffect(() => onSnapshot(empresaDoc(empresaId!, 'configuracoes', 'empresa'), (snap) => { if (snap.exists()) setEmpresa({ ...empresaPadrao, ...(snap.data() as ConfiguracaoEmpresa) }); }, () => undefined), [empresaId]);
 
@@ -157,7 +250,7 @@ export function OrdensServicoPage() {
   const filtradas = useMemo(() => {
     const termo = normalizarTexto(busca);
     if (!termo) return ordens;
-    return ordens.filter((os) => normalizarTexto(`${os.numero} ${os.clienteNome} ${os.aparelhoMarca} ${os.aparelhoModelo} ${os.status}`).includes(termo));
+    return ordens.filter((os) => normalizarTexto(`${os.numero} ${os.clienteNome} ${os.fornecedorNome ?? ''} ${os.aparelhoMarca} ${os.aparelhoModelo} ${os.status}`).includes(termo));
   }, [busca, ordens]);
 
   const tecnicoSelecionado = usuarios.find((u) => u.id === form.tecnicoId);
@@ -183,8 +276,10 @@ export function OrdensServicoPage() {
   const abrirEdicao = (os: OrdemServico) => {
     setEdicao(os);
     setForm({
-      clienteId: os.clienteId,
+      clienteId: os.clienteId ?? '',
       clienteNome: os.clienteNome,
+      fornecedorId: os.fornecedorId ?? '',
+      fornecedorNome: os.fornecedorNome ?? '',
       aparelhoMarca: os.aparelhoMarca,
       aparelhoModelo: os.aparelhoModelo,
       aparelhoImei: os.aparelhoImei ?? '',
@@ -255,8 +350,10 @@ export function OrdensServicoPage() {
     try {
       const totais = calcularTotais(itensFormulario, form.desconto);
       const dadosBase = {
-        clienteId: form.clienteId,
+        clienteId: form.clienteId || '',
         clienteNome: form.clienteNome.trim(),
+        fornecedorId: form.fornecedorId || '',
+        fornecedorNome: form.fornecedorNome.trim(),
         aparelhoMarca: form.aparelhoMarca.trim(),
         aparelhoModelo: form.aparelhoModelo.trim(),
         aparelhoImei: form.aparelhoImei.trim(),
@@ -469,11 +566,11 @@ export function OrdensServicoPage() {
         const registroFinanceiroRef = doc(empresaCollection(empresaId!, 'registrosFinanceiros'));
         if (movimentoRef) transaction.set(movimentoRef, {
           tipo: 'ENTRADA', origem: 'ORDEM_SERVICO', origemId: selecionada.id, origemNumero: selecionada.numero,
-          descricao: `Recebimento da OS #${String(selecionada.numero).padStart(5, '0')}`, clienteId: selecionada.clienteId, clienteNome: selecionada.clienteNome,
+          descricao: `Recebimento da OS #${String(selecionada.numero).padStart(5, '0')}`, clienteId: selecionada.clienteId || '', clienteNome: selecionada.clienteNome,
           valor, formaPagamento: formaPagamentoOS, data: hojeIso(), usuarioId: usuario.id, usuarioNome: usuario.nome, criadoEm: serverTimestamp(),
         });
         if (contaRef) transaction.set(contaRef, {
-          clienteId: selecionada.clienteId, clienteNome: selecionada.clienteNome, ordemServicoId: selecionada.id, ordemServicoNumero: selecionada.numero,
+          clienteId: selecionada.clienteId || '', clienteNome: selecionada.clienteNome, ordemServicoId: selecionada.id, ordemServicoNumero: selecionada.numero,
           descricao: `OS #${String(selecionada.numero).padStart(5, '0')} — ${selecionada.aparelhoMarca} ${selecionada.aparelhoModelo}`,
           valorOriginal: valor, valorAberto: valor, vencimento: vencimentoCarteiraOS, status: 'ABERTA', observacoes: 'Gerada automaticamente no recebimento da OS.',
           registroFinanceiroId: registroFinanceiroRef.id, criadoEm: serverTimestamp(), atualizadoEm: serverTimestamp(),
@@ -482,7 +579,7 @@ export function OrdensServicoPage() {
           tipo: formaPagamentoOS === 'CARTEIRA' ? 'CONTAS_RECEBER' : 'RECEITA',
           origem: 'ORDEM_SERVICO', origemId: selecionada.id, origemNumero: selecionada.numero,
           descricao: `OS #${String(selecionada.numero).padStart(5, '0')} — ${selecionada.aparelhoMarca} ${selecionada.aparelhoModelo}`,
-          clienteId: selecionada.clienteId, clienteNome: selecionada.clienteNome,
+          clienteId: selecionada.clienteId || '', clienteNome: selecionada.clienteNome,
           valor, formaPagamento: formaPagamentoOS,
           status: formaPagamentoOS === 'CARTEIRA' ? 'ABERTO' : 'RECEBIDO',
           vencimento: formaPagamentoOS === 'CARTEIRA' ? vencimentoCarteiraOS : '',
@@ -573,7 +670,7 @@ export function OrdensServicoPage() {
               {filtradas.map((os) => (
                 <tr key={os.id} className="click-row" onDoubleClick={() => abrirDetalhe(os)}>
                   <td className="code-cell">#{String(os.numero).padStart(5, '0')}</td>
-                  <td><strong>{os.clienteNome}</strong><small>{os.aparelhoMarca} {os.aparelhoModelo}</small></td>
+                  <td><strong>{os.clienteNome}</strong><small>{os.fornecedorNome ? `Fornecedor: ${os.fornecedorNome} · ` : ''}{os.aparelhoMarca} {os.aparelhoModelo}</small></td>
                   <td><span className={`status status-${os.status.toLowerCase()}`}>{statusLabel(os.status)}</span></td>
                   <td>{moeda(os.valorTotal)}</td>
                   <td>{dataHoraBr(os.criadoEm)}</td>
@@ -588,10 +685,24 @@ export function OrdensServicoPage() {
 
       <Modal aberto={modalForm} aoFechar={() => setModalForm(false)} titulo={edicao ? `Editar OS #${String(edicao.numero).padStart(5, '0')}` : 'Nova ordem de serviço'} largura="xl">
         <form className="form-grid" onSubmit={salvarOS}>
-          <label className="field field-span-2">
-            <span>Cliente *</span>
-            <input required value={form.clienteNome} onChange={(e) => setForm({ ...form, clienteNome: e.target.value, clienteId: '' })} placeholder="Digite o nome do cliente" />
-          </label>
+          <CampoBuscaCadastro
+            label="Cliente"
+            valor={form.clienteNome}
+            selecionadoId={form.clienteId}
+            opcoes={clientes}
+            placeholder="Digite para buscar ou informe o cliente"
+            obrigatorio
+            className="field-span-2"
+            aoAlterar={(clienteNome, clienteId) => setForm((atual) => ({ ...atual, clienteNome, clienteId }))}
+          />
+          <CampoBuscaCadastro
+            label="Fornecedor"
+            valor={form.fornecedorNome}
+            selecionadoId={form.fornecedorId}
+            opcoes={fornecedores}
+            placeholder="Digite para buscar ou informe o fornecedor"
+            aoAlterar={(fornecedorNome, fornecedorId) => setForm((atual) => ({ ...atual, fornecedorNome, fornecedorId }))}
+          />
           <label className="field"><span>Responsável</span><select value={form.tecnicoId} onChange={(e) => setForm({ ...form, tecnicoId: e.target.value })}><option value="">Não definido</option>{usuarios.filter((u) => u.ativo).map((u) => <option value={u.id} key={u.id}>{u.nome}</option>)}</select></label>
           <label className="field"><span>Previsão de entrega</span><input type="date" value={form.previsaoEntrega} onChange={(e) => setForm({ ...form, previsaoEntrega: e.target.value })} /></label>
           <label className="field"><span>Marca *</span><input required value={form.aparelhoMarca} onChange={(e) => setForm({ ...form, aparelhoMarca: e.target.value })} placeholder="Ex.: Samsung" /></label>
@@ -638,7 +749,7 @@ export function OrdensServicoPage() {
 
       <Modal aberto={modalDetalhe} aoFechar={() => setModalDetalhe(false)} titulo={selecionada ? `OS #${String(selecionada.numero).padStart(5, '0')} — ${selecionada.clienteNome}` : 'Ordem de serviço'} largura="xl">
         {selecionada && <div className="os-detail">
-          <div className="os-detail-header"><div><span className={`status status-${selecionada.status.toLowerCase()}`}>{statusLabel(selecionada.status)}</span><h3>{selecionada.aparelhoMarca} {selecionada.aparelhoModelo}</h3><p>Defeito: {selecionada.defeitoRelatado}</p></div><div className="os-actions"><button className="button button-secondary" onClick={() => abrirEdicao(selecionada)}><Edit3 size={16} />Editar</button><button className="button button-secondary" onClick={() => void gerarPDF()}><FileDown size={16} />PDF</button>{podeExcluir && <button className="button button-danger-soft" disabled={excluindoId === selecionada.id} onClick={() => void excluirOS(selecionada)}><Trash2 size={16} />{excluindoId === selecionada.id ? 'Excluindo...' : 'Excluir OS'}</button>}{!selecionada.estoqueBaixado && <button className="button button-primary" onClick={() => void concluirOS()}><CheckCircle2 size={16} />Concluir e baixar peças</button>}{selecionada.estoqueBaixado && !selecionada.pagamentoRegistrado && <button className="button button-primary" onClick={abrirPagamentoOS}><CheckCircle2 size={16} />Receber e entregar</button>}{selecionada.pagamentoRegistrado && <span className="badge badge-success">Pago — {selecionada.formaPagamento}</span>}</div></div>
+          <div className="os-detail-header"><div><span className={`status status-${selecionada.status.toLowerCase()}`}>{statusLabel(selecionada.status)}</span><h3>{selecionada.aparelhoMarca} {selecionada.aparelhoModelo}</h3><p>Defeito: {selecionada.defeitoRelatado}</p>{selecionada.fornecedorNome && <p>Fornecedor: {selecionada.fornecedorNome}</p>}</div><div className="os-actions"><button className="button button-secondary" onClick={() => abrirEdicao(selecionada)}><Edit3 size={16} />Editar</button><button className="button button-secondary" onClick={() => void gerarPDF()}><FileDown size={16} />PDF</button>{podeExcluir && <button className="button button-danger-soft" disabled={excluindoId === selecionada.id} onClick={() => void excluirOS(selecionada)}><Trash2 size={16} />{excluindoId === selecionada.id ? 'Excluindo...' : 'Excluir OS'}</button>}{!selecionada.estoqueBaixado && <button className="button button-primary" onClick={() => void concluirOS()}><CheckCircle2 size={16} />Concluir e baixar peças</button>}{selecionada.estoqueBaixado && !selecionada.pagamentoRegistrado && <button className="button button-primary" onClick={abrirPagamentoOS}><CheckCircle2 size={16} />Receber e entregar</button>}{selecionada.pagamentoRegistrado && <span className="badge badge-success">Pago — {selecionada.formaPagamento}</span>}</div></div>
           <div className="os-summary os-summary-5"><div><span>Diagnóstico</span><strong>{selecionada.diagnostico || 'Ainda não informado'}</strong></div><div><span>Técnico</span><strong>{selecionada.tecnicoNome || 'Não definido'}</strong></div><div><span>Garantia</span><strong>{selecionada.garantiaDias} dias</strong></div><div><span>Bloqueio</span><strong>{tiposBloqueio.find((tipo) => tipo.value === (selecionada.tipoBloqueio || 'NENHUM'))?.label || 'Sem bloqueio'}</strong></div><div><span>Total</span><strong className="total-highlight">{moeda(totaisSelecionada.valorTotal)}</strong></div></div>
           <div className="os-kpis"><div className="mini-kpi"><span>Serviços</span><strong>{moeda(totaisSelecionada.valorServicos)}</strong></div><div className="mini-kpi"><span>Peças</span><strong>{moeda(totaisSelecionada.valorProdutos)}</strong></div><div className="mini-kpi"><span>Desconto</span><strong>{moeda(selecionada.desconto)}</strong></div></div>
           <section className="embedded-panel"><div className="panel-header"><div><h3>Itens da OS</h3><p>Produto, serviço e preço podem ser informados livremente, sem cadastro prévio.</p></div></div><div className="table-wrap"><table><thead><tr><th>Tipo</th><th>Descrição</th><th>Qtd.</th><th>Unitário</th><th>Total</th></tr></thead><tbody>{itens.map((item) => <tr key={item.id}><td><span className="badge badge-muted">{item.tipo === 'PRODUTO' ? 'Produto' : 'Serviço'}</span></td><td>{item.descricao}</td><td>{item.quantidade}</td><td>{moeda(item.valorUnitario)}</td><td>{moeda(item.valorTotal)}</td></tr>)}{itensCarregados && itens.length === 0 && <tr><td colSpan={5}><div className="empty-state compact">Nenhum item adicionado.</div></td></tr>}</tbody></table></div>{!selecionada.estoqueBaixado && <div className="add-item-form add-item-form-6"><select value={tipoItem} onChange={(e) => { setTipoItem(e.target.value as typeof tipoItem); setDescricaoItem(''); setValorItem(0); }}><option value="SERVICO">Serviço</option><option value="PRODUTO">Produto</option></select><input value={descricaoItem} onChange={(e) => setDescricaoItem(e.target.value)} placeholder="Digite o produto ou serviço" title="Descrição livre" /><input type="number" min="0.01" step="0.01" value={quantidadeItem} onChange={(e) => setQuantidadeItem(Number(e.target.value || 0))} title="Quantidade" /><input type="number" min="0" step="0.01" value={valorItem} onChange={(e) => setValorItem(Number(e.target.value || 0))} title="Preço livre" placeholder="Preço" /><div className="item-total-box"><span>Parcial</span><strong>{moeda(totalParcialItem)}</strong></div><button className="button button-secondary" disabled={adicionandoItem} onClick={() => void adicionarItem()}><PackagePlus size={16} />Adicionar item</button></div>}</section>

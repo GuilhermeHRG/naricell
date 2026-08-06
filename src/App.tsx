@@ -9,6 +9,7 @@ import { Layout, type PageKey } from './components/Layout';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ClientesPage } from './pages/ClientesPage';
+import { FornecedoresPage } from './pages/FornecedoresPage';
 import { ProdutosPage } from './pages/ProdutosPage';
 import { ServicosPage } from './pages/ServicosPage';
 import { EstoquePage } from './pages/EstoquePage';
@@ -119,6 +120,7 @@ export function App() {
     }
     switch (pagina) {
       case 'clientes': return <ClientesPage />;
+      case 'fornecedores': return <FornecedoresPage />;
       case 'produtos': return <ProdutosPage />;
       case 'servicos': return <ServicosPage />;
       case 'estoque': return <EstoquePage />;

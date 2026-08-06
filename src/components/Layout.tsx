@@ -21,7 +21,7 @@ import { useAuth } from '../context/AuthContext';
 import { isMasterEmail } from '../lib/licensing';
 import type { Perfil } from '../types';
 
-export type PageKey = 'dashboard' | 'clientes' | 'produtos' | 'servicos' | 'estoque' | 'ordens' | 'caixa' | 'financeiro' | 'usuarios' | 'configuracoes' | 'fornecedor';
+export type PageKey = 'dashboard' | 'clientes' | 'fornecedores' | 'produtos' | 'servicos' | 'estoque' | 'ordens' | 'caixa' | 'financeiro' | 'usuarios' | 'configuracoes' | 'fornecedor';
 
 interface ItemMenu {
   key: PageKey;
@@ -34,6 +34,7 @@ interface ItemMenu {
 const itens: ItemMenu[] = [
   { key: 'dashboard', label: 'Visão geral', icon: LayoutDashboard },
   { key: 'clientes', label: 'Clientes', icon: ContactRound },
+  { key: 'fornecedores', label: 'Fornecedores', icon: Building2 },
   { key: 'produtos', label: 'Produtos e peças', icon: PackageSearch },
   { key: 'servicos', label: 'Serviços de reparo', icon: Wrench },
   { key: 'estoque', label: 'Estoque', icon: Boxes, perfis: ['ADMIN', 'ATENDENTE'] },

@@ -68,8 +68,10 @@ export interface Servico extends EntityBase {
 
 export interface OrdemServico extends EntityBase {
   numero: number;
-  clienteId: string;
+  clienteId?: string;
   clienteNome: string;
+  fornecedorId?: string;
+  fornecedorNome?: string;
   aparelhoMarca: string;
   aparelhoModelo: string;
   aparelhoImei?: string;
@@ -155,7 +157,10 @@ export interface Fornecedor extends EntityBase {
   nome: string;
   cpfCnpj?: string;
   telefone?: string;
+  whatsapp?: string;
   email?: string;
+  endereco?: string;
+  observacoes?: string;
   ativo: boolean;
 }
 
