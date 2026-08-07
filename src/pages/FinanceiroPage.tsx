@@ -7,19 +7,96 @@ import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
 import { excluirContaPagar, excluirContaReceber } from '../lib/exclusoes';
 import { empresaCollection, empresaDoc } from '../lib/tenant';
-import { dataBr, hojeIso, moeda } from '../lib/utils';
-import type { Cliente, ContaPagar, ContaReceber, OrdemServico } from '../types';
+import { dataBr, hojeIso, moeda, normalizarTexto } from '../lib/utils';
+import type { Cliente, ContaPagar, ContaReceber, Fornecedor, OrdemServico } from '../types';
 
 const contaReceberVazia = { clienteId: '', ordemServicoId: '', descricao: '', valorOriginal: 0, vencimento: hojeIso(), observacoes: '' };
-const contaPagarVazia = { fornecedorNome: '', descricao: '', categoria: 'Despesa geral', valorOriginal: 0, vencimento: hojeIso(), observacoes: '' };
+const contaPagarVazia = { fornecedorId: '', fornecedorNome: '', descricao: '', categoria: 'Despesa geral', valorOriginal: 0, vencimento: hojeIso(), observacoes: '' };
+
+
+interface FornecedorSelecionavel {
+  id: string;
+  nome: string;
+  telefone?: string;
+  whatsapp?: string;
+  cpfCnpj?: string;
+  ativo: boolean;
+}
+
+function CampoBuscaFornecedor({
+  valor,
+  selecionadoId,
+  fornecedores,
+  aoAlterar,
+}: {
+  valor: string;
+  selecionadoId: string;
+  fornecedores: FornecedorSelecionavel[];
+  aoAlterar: (nome: string, id: string) => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const termo = normalizarTexto(valor);
+  const selecionado = fornecedores.find((fornecedor) => fornecedor.id === selecionadoId);
+  const sugestoes = useMemo(() => {
+    if (!termo) return fornecedores.filter((fornecedor) => fornecedor.ativo).slice(0, 8);
+    return fornecedores
+      .filter((fornecedor) => fornecedor.ativo && normalizarTexto(
+        `${fornecedor.nome} ${fornecedor.whatsapp ?? ''} ${fornecedor.telefone ?? ''} ${fornecedor.cpfCnpj ?? ''}`,
+      ).includes(termo))
+      .slice(0, 8);
+  }, [fornecedores, termo]);
+
+  return (
+    <div className="field field-full field-autocomplete">
+      <span>Fornecedor *</span>
+      <div className="autocomplete-control">
+        <input
+          required
+          autoComplete="off"
+          value={valor}
+          onFocus={() => setAberto(true)}
+          onBlur={() => window.setTimeout(() => setAberto(false), 120)}
+          onChange={(evento) => {
+            aoAlterar(evento.target.value, '');
+            setAberto(true);
+          }}
+          placeholder="Digite para buscar ou informe o fornecedor"
+        />
+        {aberto && sugestoes.length > 0 && (
+          <div className="autocomplete-options" role="listbox">
+            {sugestoes.map((fornecedor) => (
+              <button
+                key={fornecedor.id}
+                type="button"
+                className="autocomplete-option"
+                onMouseDown={(evento) => evento.preventDefault()}
+                onClick={() => {
+                  aoAlterar(fornecedor.nome, fornecedor.id);
+                  setAberto(false);
+                }}
+              >
+                <strong>{fornecedor.nome}</strong>
+                <small>{fornecedor.whatsapp || fornecedor.telefone || fornecedor.cpfCnpj || 'Cadastro sem contato informado'}</small>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <small className={selecionado ? 'autocomplete-linked' : 'autocomplete-free'}>
+        {selecionado ? `Cadastro vinculado: ${selecionado.nome}` : valor.trim() ? 'Texto livre — nenhum cadastro vinculado' : 'Digite para buscar ou informe um nome livre'}
+      </small>
+    </div>
+  );
+}
 
 export function FinanceiroPage() {
-  const [contasReceber, setContasReceber] = useState<ContaReceber[]>([]); const [contasPagar, setContasPagar] = useState<ContaPagar[]>([]); const [clientes, setClientes] = useState<Cliente[]>([]); const [ordens, setOrdens] = useState<OrdemServico[]>([]);
+  const [contasReceber, setContasReceber] = useState<ContaReceber[]>([]); const [contasPagar, setContasPagar] = useState<ContaPagar[]>([]); const [clientes, setClientes] = useState<Cliente[]>([]); const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]); const [ordens, setOrdens] = useState<OrdemServico[]>([]);
   const [tipoModal, setTipoModal] = useState<'RECEBER' | 'PAGAR' | null>(null); const [formReceber, setFormReceber] = useState(contaReceberVazia); const [formPagar, setFormPagar] = useState(contaPagarVazia); const [contaRecebimento, setContaRecebimento] = useState<ContaReceber | null>(null); const [contaPagamento, setContaPagamento] = useState<ContaPagar | null>(null); const [valorBaixa, setValorBaixa] = useState(0); const [formaPagamento, setFormaPagamento] = useState('DINHEIRO'); const [salvando, setSalvando] = useState(false); const [excluindoId, setExcluindoId] = useState<string | null>(null);
   const { usuario, empresaId } = useAuth(); const { showToast } = useToast(); const podeExcluir = usuario?.perfil === 'ADMIN';
   useEffect(() => onSnapshot(query(empresaCollection(empresaId!, 'contasReceber'), orderBy('vencimento', 'asc')), (snap) => setContasReceber(snap.docs.map((d) => ({ id: d.id, ...d.data() } as ContaReceber))), () => showToast('Não foi possível carregar contas a receber.', 'error')), [showToast, empresaId]);
   useEffect(() => onSnapshot(query(empresaCollection(empresaId!, 'contasPagar'), orderBy('vencimento', 'asc')), (snap) => setContasPagar(snap.docs.map((d) => ({ id: d.id, ...d.data() } as ContaPagar))), () => showToast('Não foi possível carregar contas a pagar.', 'error')), [showToast, empresaId]);
   useEffect(() => onSnapshot(query(empresaCollection(empresaId!, 'clientes'), orderBy('nome')), (snap) => setClientes(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Cliente))), () => undefined), [empresaId]);
+  useEffect(() => onSnapshot(query(empresaCollection(empresaId!, 'fornecedores'), orderBy('nome')), (snap) => setFornecedores(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Fornecedor))), () => showToast('Não foi possível carregar os fornecedores para busca.', 'error')), [empresaId, showToast]);
   useEffect(() => onSnapshot(query(empresaCollection(empresaId!, 'ordensServico'), orderBy('criadoEm', 'desc')), (snap) => setOrdens(snap.docs.map((d) => ({ id: d.id, ...d.data() } as OrdemServico))), () => undefined), [empresaId]);
 
   const totalReceber = useMemo(() => contasReceber.filter((conta) => ['ABERTA', 'PARCIAL'].includes(conta.status)).reduce((soma, conta) => soma + Number(conta.valorAberto || 0), 0), [contasReceber]);
@@ -31,7 +108,7 @@ export function FinanceiroPage() {
   const selecionarOS = (id: string) => { const os = ordens.find((ordem) => ordem.id === id); setFormReceber((atual) => ({ ...atual, ordemServicoId: id, clienteId: os?.clienteId ?? atual.clienteId, descricao: os ? `OS #${String(os.numero).padStart(5, '0')} — ${os.aparelhoMarca} ${os.aparelhoModelo}` : atual.descricao, valorOriginal: os ? Math.max(0, os.valorTotal) : atual.valorOriginal })); };
 
   const salvarContaReceber = async (evento: FormEvent) => { evento.preventDefault(); if (!clienteDaConta) return showToast('Selecione um cliente.', 'error'); setSalvando(true); try { const os = ordens.find((ordem) => ordem.id === formReceber.ordemServicoId); await addDoc(empresaCollection(empresaId!, 'contasReceber'), { clienteId: clienteDaConta.id, clienteNome: clienteDaConta.nome, ordemServicoId: os?.id ?? '', ordemServicoNumero: os?.numero ?? null, descricao: formReceber.descricao.trim(), valorOriginal: Number(formReceber.valorOriginal), valorAberto: Number(formReceber.valorOriginal), vencimento: formReceber.vencimento, status: 'ABERTA', observacoes: formReceber.observacoes.trim(), criadoEm: serverTimestamp(), atualizadoEm: serverTimestamp() }); showToast('Conta a receber lançada.'); setTipoModal(null); } catch { showToast('Não foi possível lançar a conta a receber.', 'error'); } finally { setSalvando(false); } };
-  const salvarContaPagar = async (evento: FormEvent) => { evento.preventDefault(); setSalvando(true); try { await addDoc(empresaCollection(empresaId!, 'contasPagar'), { fornecedorNome: formPagar.fornecedorNome.trim(), descricao: formPagar.descricao.trim(), categoria: formPagar.categoria.trim(), valorOriginal: Number(formPagar.valorOriginal), valorAberto: Number(formPagar.valorOriginal), vencimento: formPagar.vencimento, status: 'ABERTA', observacoes: formPagar.observacoes.trim(), criadoEm: serverTimestamp(), atualizadoEm: serverTimestamp() }); showToast('Conta a pagar lançada.'); setTipoModal(null); } catch { showToast('Não foi possível lançar a conta a pagar.', 'error'); } finally { setSalvando(false); } };
+  const salvarContaPagar = async (evento: FormEvent) => { evento.preventDefault(); setSalvando(true); try { await addDoc(empresaCollection(empresaId!, 'contasPagar'), { fornecedorId: formPagar.fornecedorId || '', fornecedorNome: formPagar.fornecedorNome.trim(), descricao: formPagar.descricao.trim(), categoria: formPagar.categoria.trim(), valorOriginal: Number(formPagar.valorOriginal), valorAberto: Number(formPagar.valorOriginal), vencimento: formPagar.vencimento, status: 'ABERTA', observacoes: formPagar.observacoes.trim(), criadoEm: serverTimestamp(), atualizadoEm: serverTimestamp() }); showToast('Conta a pagar lançada.'); setTipoModal(null); } catch { showToast('Não foi possível lançar a conta a pagar.', 'error'); } finally { setSalvando(false); } };
 
   const abrirRecebimento = (conta: ContaReceber) => { setContaRecebimento(conta); setValorBaixa(conta.valorAberto); setFormaPagamento('DINHEIRO'); };
   const abrirPagamento = (conta: ContaPagar) => { setContaPagamento(conta); setValorBaixa(conta.valorAberto); setFormaPagamento('PIX'); };
@@ -77,7 +154,7 @@ Pagamentos e movimentações de caixa vinculados também serão removidos.`)) re
     <div className="dashboard-columns finance-columns"><section className="panel"><div className="panel-header"><div><h3>Contas a receber</h3><p>Clientes e vendas pendentes</p></div></div><div className="table-wrap compact-table"><table><thead><tr><th>Cliente / descrição</th><th>Vencimento</th><th>Saldo</th><th>Status</th><th>Ações</th></tr></thead><tbody>{contasReceber.map((conta) => <tr key={conta.id}><td><strong>{conta.clienteNome}</strong><small>{conta.descricao}</small></td><td>{dataBr(conta.vencimento)}</td><td>{moeda(conta.valorAberto)}</td><td><span className={`badge ${conta.status === 'RECEBIDA' ? 'badge-success' : conta.status === 'PARCIAL' ? 'badge-warning' : 'badge-muted'}`}>{conta.status}</span></td><td className="actions-cell">{['ABERTA', 'PARCIAL'].includes(conta.status) && <button className="button button-small" onClick={() => abrirRecebimento(conta)}>Receber</button>}{podeExcluir && <button className="icon-button danger" title="Excluir conta a receber" disabled={excluindoId === `receber-${conta.id}`} onClick={() => void excluirReceber(conta)}><Trash2 size={17}/></button>}</td></tr>)}{contasReceber.length === 0 && <tr><td colSpan={5}><div className="empty-state compact">Nenhuma conta a receber.</div></td></tr>}</tbody></table></div></section>
       <section className="panel"><div className="panel-header"><div><h3>Contas a pagar</h3><p>Fornecedores e despesas da loja</p></div></div><div className="table-wrap compact-table"><table><thead><tr><th>Fornecedor / descrição</th><th>Vencimento</th><th>Saldo</th><th>Status</th><th>Ações</th></tr></thead><tbody>{contasPagar.map((conta) => <tr key={conta.id}><td><strong>{conta.fornecedorNome}</strong><small>{conta.descricao}</small></td><td>{dataBr(conta.vencimento)}</td><td>{moeda(conta.valorAberto)}</td><td><span className={`badge ${conta.status === 'PAGA' ? 'badge-success' : conta.status === 'PARCIAL' ? 'badge-warning' : 'badge-muted'}`}>{conta.status}</span></td><td className="actions-cell">{['ABERTA', 'PARCIAL'].includes(conta.status) && <button className="button button-small" onClick={() => abrirPagamento(conta)}>Pagar</button>}{podeExcluir && <button className="icon-button danger" title="Excluir conta a pagar" disabled={excluindoId === `pagar-${conta.id}`} onClick={() => void excluirPagar(conta)}><Trash2 size={17}/></button>}</td></tr>)}{contasPagar.length === 0 && <tr><td colSpan={5}><div className="empty-state compact">Nenhuma conta a pagar.</div></td></tr>}</tbody></table></div></section></div>
     <Modal aberto={tipoModal === 'RECEBER'} aoFechar={() => setTipoModal(null)} titulo="Nova conta a receber"><form className="form-grid" onSubmit={salvarContaReceber}><label className="field field-full"><span>Vincular a uma OS (opcional)</span><select value={formReceber.ordemServicoId} onChange={(e) => selecionarOS(e.target.value)}><option value="">Não vincular</option>{ordens.map((os) => <option key={os.id} value={os.id}>OS #{String(os.numero).padStart(5, '0')} — {os.clienteNome} — {moeda(os.valorTotal)}</option>)}</select></label><label className="field field-full"><span>Cliente *</span><select required value={formReceber.clienteId} onChange={(e) => setFormReceber({ ...formReceber, clienteId: e.target.value })}><option value="">Selecione</option>{clientes.filter((c) => c.ativo).map((cliente) => <option key={cliente.id} value={cliente.id}>{cliente.nome}</option>)}</select></label><label className="field field-full"><span>Descrição *</span><input required value={formReceber.descricao} onChange={(e) => setFormReceber({ ...formReceber, descricao: e.target.value })} /></label><label className="field"><span>Valor *</span><input required min="0.01" step="0.01" type="number" value={formReceber.valorOriginal} onChange={(e) => setFormReceber({ ...formReceber, valorOriginal: Number(e.target.value || 0) })} /></label><label className="field"><span>Vencimento *</span><input required type="date" value={formReceber.vencimento} onChange={(e) => setFormReceber({ ...formReceber, vencimento: e.target.value })} /></label><label className="field field-full"><span>Observações</span><textarea rows={2} value={formReceber.observacoes} onChange={(e) => setFormReceber({ ...formReceber, observacoes: e.target.value })} /></label><div className="modal-actions field-full"><button type="button" className="button button-secondary" onClick={() => setTipoModal(null)}>Cancelar</button><button className="button button-primary" disabled={salvando}>{salvando ? 'Salvando...' : 'Lançar conta'}</button></div></form></Modal>
-    <Modal aberto={tipoModal === 'PAGAR'} aoFechar={() => setTipoModal(null)} titulo="Nova conta a pagar"><form className="form-grid" onSubmit={salvarContaPagar}><label className="field field-full"><span>Fornecedor *</span><input required value={formPagar.fornecedorNome} onChange={(e) => setFormPagar({ ...formPagar, fornecedorNome: e.target.value })} /></label><label className="field field-full"><span>Descrição *</span><input required value={formPagar.descricao} onChange={(e) => setFormPagar({ ...formPagar, descricao: e.target.value })} /></label><label className="field"><span>Categoria</span><input value={formPagar.categoria} onChange={(e) => setFormPagar({ ...formPagar, categoria: e.target.value })} /></label><label className="field"><span>Valor *</span><input required min="0.01" step="0.01" type="number" value={formPagar.valorOriginal} onChange={(e) => setFormPagar({ ...formPagar, valorOriginal: Number(e.target.value || 0) })} /></label><label className="field"><span>Vencimento *</span><input required type="date" value={formPagar.vencimento} onChange={(e) => setFormPagar({ ...formPagar, vencimento: e.target.value })} /></label><label className="field field-full"><span>Observações</span><textarea rows={2} value={formPagar.observacoes} onChange={(e) => setFormPagar({ ...formPagar, observacoes: e.target.value })} /></label><div className="modal-actions field-full"><button type="button" className="button button-secondary" onClick={() => setTipoModal(null)}>Cancelar</button><button className="button button-primary" disabled={salvando}>{salvando ? 'Salvando...' : 'Lançar conta'}</button></div></form></Modal>
+    <Modal aberto={tipoModal === 'PAGAR'} aoFechar={() => setTipoModal(null)} titulo="Nova conta a pagar"><form className="form-grid" onSubmit={salvarContaPagar}><CampoBuscaFornecedor valor={formPagar.fornecedorNome} selecionadoId={formPagar.fornecedorId} fornecedores={fornecedores} aoAlterar={(fornecedorNome, fornecedorId) => setFormPagar((atual) => ({ ...atual, fornecedorNome, fornecedorId }))} /><label className="field field-full"><span>Descrição *</span><input required value={formPagar.descricao} onChange={(e) => setFormPagar({ ...formPagar, descricao: e.target.value })} /></label><label className="field"><span>Categoria</span><input value={formPagar.categoria} onChange={(e) => setFormPagar({ ...formPagar, categoria: e.target.value })} /></label><label className="field"><span>Valor *</span><input required min="0.01" step="0.01" type="number" value={formPagar.valorOriginal} onChange={(e) => setFormPagar({ ...formPagar, valorOriginal: Number(e.target.value || 0) })} /></label><label className="field"><span>Vencimento *</span><input required type="date" value={formPagar.vencimento} onChange={(e) => setFormPagar({ ...formPagar, vencimento: e.target.value })} /></label><label className="field field-full"><span>Observações</span><textarea rows={2} value={formPagar.observacoes} onChange={(e) => setFormPagar({ ...formPagar, observacoes: e.target.value })} /></label><div className="modal-actions field-full"><button type="button" className="button button-secondary" onClick={() => setTipoModal(null)}>Cancelar</button><button className="button button-primary" disabled={salvando}>{salvando ? 'Salvando...' : 'Lançar conta'}</button></div></form></Modal>
     <Modal aberto={!!contaRecebimento} aoFechar={() => setContaRecebimento(null)} titulo="Registrar recebimento"><div className="form-stack"><div className="info-box">Cliente: <strong>{contaRecebimento?.clienteNome}</strong><br />Saldo em aberto: <strong>{moeda(contaRecebimento?.valorAberto)}</strong></div><label className="field"><span>Valor recebido</span><input type="number" min="0.01" max={contaRecebimento?.valorAberto} step="0.01" value={valorBaixa} onChange={(e) => setValorBaixa(Number(e.target.value || 0))} /></label><label className="field"><span>Forma de pagamento</span><select value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)}><option>DINHEIRO</option><option>PIX</option><option>CARTÃO</option><option>TRANSFERÊNCIA</option><option>BOLETO</option></select></label><div className="modal-actions"><button className="button button-secondary" onClick={() => setContaRecebimento(null)}>Cancelar</button><button className="button button-primary" disabled={salvando} onClick={() => void confirmarRecebimento()}>{salvando ? 'Registrando...' : 'Confirmar recebimento'}</button></div></div></Modal>
     <Modal aberto={!!contaPagamento} aoFechar={() => setContaPagamento(null)} titulo="Registrar pagamento"><div className="form-stack"><div className="info-box">Fornecedor: <strong>{contaPagamento?.fornecedorNome}</strong><br />Saldo em aberto: <strong>{moeda(contaPagamento?.valorAberto)}</strong></div><label className="field"><span>Valor pago</span><input type="number" min="0.01" max={contaPagamento?.valorAberto} step="0.01" value={valorBaixa} onChange={(e) => setValorBaixa(Number(e.target.value || 0))} /></label><label className="field"><span>Forma de pagamento</span><select value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)}><option>PIX</option><option>DINHEIRO</option><option>TRANSFERÊNCIA</option><option>CARTÃO</option><option>BOLETO</option></select></label><div className="modal-actions"><button className="button button-secondary" onClick={() => setContaPagamento(null)}>Cancelar</button><button className="button button-primary" disabled={salvando} onClick={() => void confirmarPagamento()}>{salvando ? 'Registrando...' : 'Confirmar pagamento'}</button></div></div></Modal>
   </>;
